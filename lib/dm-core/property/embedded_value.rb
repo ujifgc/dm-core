@@ -5,6 +5,18 @@ module DataMapper
 
       attr_reader :embedded_model
 
+      def set(resource, attributes)
+        set!(resource, typecast(attributes, resource))
+      end
+
+      def typecast(attributes, resource)
+        if attributes.kind_of?(embedded_model)
+          attributes
+        else
+          embedded_model.new(attributes, resource)
+        end
+      end
+
       protected
 
       def initialize(model, name, options = {})
