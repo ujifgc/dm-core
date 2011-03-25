@@ -4,7 +4,7 @@ module DataMapper
       # Relationship class with implementation specific
       # to n side of 1 to n association
       class Relationship < Associations::Relationship
-        OPTIONS = superclass::OPTIONS.dup << :required << :key
+        OPTIONS = superclass::OPTIONS.dup << :required << :key << :unique
 
         # @api semipublic
         alias_method :source_repository_name, :child_repository_name
@@ -31,36 +31,39 @@ module DataMapper
           @key
         end
 
-        # @api private
-        def nullable?
-          klass = self.class
-          warn "#{klass}#nullable? is deprecated, use #{klass}#required? instead (#{caller[0]})"
-          !required?
+        # @api semipublic
+        def unique?
+          !!@unique
         end
 
-        # Returns a set of keys that identify child model
+        # @deprecated
+        def nullable?
+          raise "#{self.class}#nullable? is deprecated, use #{self.class}#required? instead (#{caller.first})"
+        end
+
+        # Returns a set of keys that identify source model
         #
-        # @return   [DataMapper::PropertySet]  a set of properties that identify child model
+        # @return   [DataMapper::PropertySet]  a set of properties that identify source model
         # @api private
         def child_key
           return @child_key if defined?(@child_key)
 
-          model           = child_model
-          repository_name = child_repository_name || parent_repository_name
+          model           = source_model
+          repository_name = source_repository_name || target_repository_name
           properties      = model.properties(repository_name)
 
-          child_key = parent_key.zip(@child_properties || []).map do |parent_property, property_name|
-            property_name ||= "#{name}_#{parent_property.name}".to_sym
+          source_key = target_key.zip(@child_properties || []).map do |target_property, property_name|
+            property_name ||= "#{name}_#{target_property.name}".to_sym
 
             properties[property_name] || begin
               # create the property within the correct repository
               DataMapper.repository(repository_name) do
-                model.property(property_name, parent_property.to_child_key, child_key_options(parent_property))
+                model.property(property_name, target_property.to_child_key, source_key_options(target_property))
               end
             end
           end
 
-          @child_key = properties.class.new(child_key).freeze
+          @child_key = properties.class.new(source_key).freeze
         end
 
         # @api semipublic
@@ -113,30 +116,35 @@ module DataMapper
         # (ex.: article)
         #
         # @param  source  [DataMapper::Resource]
-        #   Child object (ex.: instance of article)
+        #   source object (ex.: instance of article)
         # @param  other_query  [DataMapper::Query]
         #   Query options
         #
         # @api semipublic
         def get(source, query = nil)
           lazy_load(source)
-          collection = get_collection(source)
-          collection.first(query) if collection
+
+          if query
+            collection = get_collection(source)
+            collection.first(query) if collection
+          else
+            get!(source)
+          end
         end
 
         def get_collection(source)
-          resource = get!(source)
-          resource.collection_for_self if resource
+          target = get!(source)
+          target.collection_for_self if target
         end
 
         # Sets value of association target (ex.: author) for given source resource
         # (ex.: article)
         #
         # @param source [DataMapper::Resource]
-        #   Child object (ex.: instance of article)
+        #   source object (ex.: instance of article)
         #
         # @param target [DataMapper::Resource]
-        #   Parent object (ex.: instance of author)
+        #   target object (ex.: instance of author)
         #
         # @api semipublic
         def set(source, target)
@@ -160,16 +168,21 @@ module DataMapper
         #
         # @api private
         def lazy_load(source)
-          return if loaded?(source) || !valid_source?(source)
+          source_key_different = source_key_different?(source)
+
+          if (loaded?(source) && !source_key_different) || !valid_source?(source)
+            return
+          end
 
           # SEL: load all related resources in the source collection
-          collection = source.collection
-          if source.saved? && collection.size > 1
+          if source.saved? && (collection = source.collection).size > 1
             eager_load(collection)
           end
 
-          unless loaded?(source)
+          if !loaded?(source) || (source_key_dirty?(source) && source.saved?)
             set!(source, resource_for(source))
+          elsif loaded?(source) && source_key_different
+            source_key.set(source, target_key.get!(get!(source)))
           end
         end
 
@@ -180,14 +193,12 @@ module DataMapper
         # @api semipublic
         def initialize(name, source_model, target_model, options = {})
           if options.key?(:nullable)
-            nullable_options = options.only(:nullable)
-            required_options = { :required => !options.delete(:nullable) }
-            warn "#{nullable_options.inspect} is deprecated, use #{required_options.inspect} instead (#{caller[2]})"
-            options.update(required_options)
+            raise ":nullable is deprecated, use :required instead (#{caller[2]})"
           end
 
           @required      = options.fetch(:required, true)
           @key           = options.fetch(:key,      false)
+          @unique        = options.fetch(:unique,   false)
           target_model ||= DataMapper::Inflector.camelize(name)
           options        = { :min => @required ? 1 : 0, :max => 1 }.update(options)
           super
@@ -229,20 +240,27 @@ module DataMapper
         #
         # @api private
         def inverse_name
-          super || DataMapper::Inflector.underscore(DataMapper::Inflector.demodulize(source_model.name)).pluralize.to_sym
+          name = super
+          return name if name
+
+          name = DataMapper::Inflector.demodulize(source_model.name)
+          name = DataMapper::Inflector.underscore(name)
+          name = DataMapper::Inflector.pluralize(name)
+          name.to_sym
         end
 
         # @api private
-        def child_key_options(parent_property)
-          options = parent_property.options.only(:length, :precision, :scale).update(
+        def source_key_options(target_property)
+          options = DataMapper::Ext::Hash.only(target_property.options, :length, :precision, :scale).update(
             :index    => name,
             :required => required?,
-            :key      => key?
+            :key      => key?,
+            :unique   => @unique
           )
 
-          if parent_property.primitive == Integer
-            min = parent_property.min
-            max = parent_property.max
+          if target_property.primitive == Integer
+            min = target_property.min
+            max = target_property.max
 
             options.update(:min => min, :max => max) if min && max
           end
@@ -252,7 +270,17 @@ module DataMapper
 
         # @api private
         def child_properties
-          child_key.map { |property| property.name }
+          source_key.map { |property| property.name }
+        end
+
+        # @api private
+        def source_key_different?(source)
+          source_key.get!(source) != target_key.get!(get!(source))
+        end
+
+        # @api private
+        def source_key_dirty?(source)
+          source.dirty_attributes.keys.any? { |property| source_key.include?(property) }
         end
       end # class Relationship
     end # module ManyToOne

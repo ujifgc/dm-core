@@ -25,7 +25,7 @@ share_examples_for "a Model with properties" do
       it 'should raise an exception if the method exists' do
         lambda {
           model.property(:key, String)
-        }.should raise_error(ArgumentError, '+name+ was :key, which cannot be used as a property name since it collides with an existing method')
+        }.should raise_error(ArgumentError, '+name+ was :key, which cannot be used as a property name since it collides with an existing method or a query option')
       end
     end
   end

@@ -10,7 +10,7 @@ module DataMapper
       # TODO: replace this with BasicObject
       instance_methods.each do |method|
         next if method =~ /\A__/ ||
-          %w[ send class dup object_id kind_of? instance_of? respond_to? respond_to_missing? equal? freeze frozen? should should_not instance_variables instance_variable_set instance_variable_get instance_variable_defined? remove_instance_variable extend hash inspect copy_object initialize_dup ].include?(method.to_s)
+          %w[ send class dup object_id kind_of? instance_of? respond_to? respond_to_missing? equal? freeze frozen? should should_not instance_variables instance_variable_set instance_variable_get instance_variable_defined? remove_instance_variable extend hash inspect to_s copy_object initialize_dup ].include?(method.to_s)
         undef_method method
       end
 
@@ -33,10 +33,10 @@ module DataMapper
 
       (Conditions::Comparison.slugs | [ :not ]).each do |slug|
         class_eval <<-RUBY, __FILE__, __LINE__ + 1
-          def #{slug}                                                                                                    # def eql
-            #{"warn \"explicit use of '#{slug}' operator is deprecated (#{caller[0]})\"" if slug == :eql || slug == :in} #   warn "explicit use of 'eql' operator is deprecated (#{caller[0]})"
-            Operator.new(self, #{slug.inspect})                                                                          #   Operator.new(self, :eql)
-          end                                                                                                            # end
+          def #{slug}                                                                                                      # def eql
+            #{"raise \"explicit use of '#{slug}' operator is deprecated (#{caller.first})\"" if slug == :eql || slug == :in}  #   raise "explicit use of 'eql' operator is deprecated (#{caller.first})"
+            Operator.new(self, #{slug.inspect})                                                                            #   Operator.new(self, :eql)
+          end                                                                                                              # end
         RUBY
       end
 
@@ -50,11 +50,27 @@ module DataMapper
         super || (defined?(@property) ? @property.instance_of?(klass) : false)
       end
 
+      # Used for creating :order options. This technique may be deprecated,
+      # so marking as semipublic until the issue is resolved.
+      #
+      # @api semipublic
+      def asc
+        Operator.new(property, :asc)
+      end
+
+      # Used for creating :order options. This technique may be deprecated,
+      # so marking as semipublic until the issue is resolved.
+      #
+      # @api semipublic
+      def desc
+        Operator.new(property, :desc)
+      end
+
       # @api semipublic
       def respond_to?(method, include_private = false)
         super                                                                   ||
         (defined?(@property) && @property.respond_to?(method, include_private)) ||
-        @model.relationships(@repository_name).key?(method)                     ||
+        @model.relationships(@repository_name).named?(method)                   ||
         @model.properties(@repository_name).named?(method)
       end
 

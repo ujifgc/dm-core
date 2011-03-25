@@ -1,4 +1,4 @@
-require File.expand_path(File.join(File.dirname(__FILE__), '..', '..', 'spec_helper'))
+require 'spec_helper'
 
 describe DataMapper::Model::Hook do
   before :all do
@@ -6,6 +6,7 @@ describe DataMapper::Model::Hook do
       include DataMapper::Resource
 
       property :id, Serial
+      property :value, Integer, :required => true, :default => 1
 
       def an_instance_method
       end

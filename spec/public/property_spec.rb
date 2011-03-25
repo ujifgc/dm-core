@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-require File.expand_path(File.join(File.dirname(__FILE__), '..', 'spec_helper'))
+require 'spec_helper'
 
 # instance methods
 describe DataMapper::Property do
@@ -22,6 +22,8 @@ describe DataMapper::Property do
       property :md5hash,      String, :key => true, :length => 32
       property :title,        String, :required => true, :unique => true
       property :description,  Text,   :length => 1..1024, :lazy => [ :detail ]
+      property :width,        Integer, :lazy => [:dimensions]
+      property :height,       Integer, :lazy => [:dimensions]
       property :format,       String, :default => 'jpeg'
       property :taken_at,     Time,   :default => proc { Time.now }
     end
@@ -37,12 +39,6 @@ describe DataMapper::Property do
       it 'returns field for specific repository when it is present'
 
       it 'sets field value using field naming convention on first reference'
-    end
-
-    describe '#custom?' do
-      it 'is true for custom type fields (not provided by dm-core)'
-
-      it 'is false for core type fields (provided by dm-core)'
     end
 
     describe '#default_for' do
@@ -103,10 +99,6 @@ describe DataMapper::Property do
       describe 'when tracking strategy is explicitly given' do
         it 'uses tracking strategy from options'
       end
-
-      describe 'when custom type has tracking stragegy' do
-        it 'uses tracking strategy from type'
-      end
     end
 
     describe '#inspect' do
@@ -147,6 +139,16 @@ describe DataMapper::Property do
 
       it 'returns false when property is not lazy loaded' do
         Track.properties[:artist].lazy?.should be(false)
+      end
+    end
+
+    describe "#lazy_load_properties" do
+      it "returns all lazy properties in the same context" do
+        Image.properties[:width].__send__(:lazy_load_properties).should == Image.properties.values_at(:width, :height)
+      end
+
+      it "returns all properties by default" do
+        Track.properties[:artist].__send__(:lazy_load_properties).should == Track.properties
       end
     end
 

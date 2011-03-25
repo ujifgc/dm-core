@@ -1,6 +1,3 @@
-# TODO: move paranoid property concerns to a ParanoidModel that is mixed
-# into Model when a Paranoid property is used
-
 # TODO: update Model#respond_to? to return true if method_method missing
 # would handle the message
 
@@ -14,18 +11,16 @@ module DataMapper
       def self.extended(model)
         model.instance_variable_set(:@properties,               {})
         model.instance_variable_set(:@field_naming_conventions, {})
-        model.instance_variable_set(:@paranoid_properties,      {})
       end
 
       chainable do
         def inherited(model)
           model.instance_variable_set(:@properties,               {})
           model.instance_variable_set(:@field_naming_conventions, @field_naming_conventions.dup)
-          model.instance_variable_set(:@paranoid_properties,      @paranoid_properties.dup)
 
           @properties.each do |repository_name, properties|
             model_properties = model.properties(repository_name)
-            properties.each { |property| model_properties[property.name] ||= property }
+            properties.each { |property| model_properties << property }
           end
 
           super
@@ -36,8 +31,8 @@ module DataMapper
       #
       # @param [Symbol] name
       #   the name for which to call this property
-      # @param [Type] type
-      #   the type to define this property ass
+      # @param [Class] type
+      #   the ruby type to define this property as
       # @param [Hash(Symbol => String)] options
       #   a hash of available options
       #
@@ -48,25 +43,19 @@ module DataMapper
       #
       # @api public
       def property(name, type, options = {})
-        caller_method = caller[2]
-
         if TrueClass == type
-          warn "#{type} is deprecated, use Boolean instead at #{caller_method}"
-          type = DataMapper::Property::Boolean
+          raise "#{type} is deprecated, use Boolean instead at #{caller[2]}"
         elsif BigDecimal == type
-          warn "#{type} is deprecated, use Decimal instead at #{caller_method}"
-          type = DataMapper::Property::Decimal
+          raise "#{type} is deprecated, use Decimal instead at #{caller[2]}"
         end
 
         # if the type can be found within Property then
         # use that class rather than the primitive
-        klass = DataMapper::Property.determine_class(type)
-
-        unless klass
+        unless klass = DataMapper::Property.determine_class(type)
           raise ArgumentError, "+type+ was #{type.inspect}, which is not a supported type"
         end
 
-        property = klass.new(self, name, options, type < DataMapper::Type ? type : nil)
+        property = klass.new(self, name, options)
 
         repository_name = self.repository_name
         properties      = properties(repository_name)
@@ -76,11 +65,11 @@ module DataMapper
         # Add property to the other mappings as well if this is for the default
         # repository.
         if repository_name == default_repository_name
-          @properties.except(repository_name).each do |repository_name, properties|
+          DataMapper::Ext::Hash.except(@properties, default_repository_name).each do |other_repository_name, properties|
             next if properties.named?(name)
 
             # make sure the property is created within the correct repository scope
-            DataMapper.repository(repository_name) do
+            DataMapper.repository(other_repository_name) do
               properties << klass.new(self, name, options, type)
             end
           end
@@ -95,7 +84,7 @@ module DataMapper
           context = :default if context == true
 
           Array(context).each do |context|
-            properties.lazy_context(context) << self
+            properties.lazy_context(context) << property
           end
         end
 
@@ -103,7 +92,7 @@ module DataMapper
         # added after the child classes' properties have been copied from
         # the parent
         descendants.each do |descendant|
-          descendant.properties(repository_name)[name] ||= property
+          descendant.properties(repository_name) << property
         end
 
         create_reader_for(property)
@@ -120,7 +109,7 @@ module DataMapper
       #   The name of the repository to use. Uses the default Repository
       #   if none is specified.
       #
-      # @return [Array]
+      # @return [PropertySet]
       #   A list of Properties defined on this Model in the given Repository
       #
       # @api public
@@ -178,7 +167,7 @@ module DataMapper
 
         descendants.each do |model|
           model.properties(repository_name).each do |property|
-            properties[property.name] ||= property
+            properties << property
           end
         end
 
@@ -186,21 +175,25 @@ module DataMapper
       end
 
       # @api private
-      def paranoid_properties
-        @paranoid_properties
-      end
-
-      # @api private
-      def set_paranoid_property(name, &block)
-        paranoid_properties[name] = block
-      end
-
-      # @api private
       def key_conditions(repository, key)
-        self.key(repository.name).zip(key.nil? ? [] : key).to_hash
+        Hash[ self.key(repository.name).zip(key.nil? ? [] : key) ]
       end
 
       private
+
+      # Defines the anonymous module that is used to add properties.
+      # Using a single module here prevents having a very large number
+      # of anonymous modules, where each property has their own module.
+      # @api private
+      def property_module
+        @property_module ||= begin
+          mod = Module.new
+          class_eval do
+            include mod
+          end
+          mod
+        end
+      end
 
       # defines the reader method for the property
       #
@@ -209,27 +202,22 @@ module DataMapper
         name                   = property.name.to_s
         reader_visibility      = property.reader_visibility
         instance_variable_name = property.instance_variable_name
-
-        class_eval <<-RUBY, __FILE__, __LINE__ + 1
-          chainable do
-            #{reader_visibility}
-            def #{name}
-              return #{instance_variable_name} if defined?(#{instance_variable_name})
-              property = properties[#{name.inspect}]
-              #{instance_variable_name} = property ? persisted_state.get(property) : nil
-            end
+        property_module.module_eval <<-RUBY, __FILE__, __LINE__ + 1
+          #{reader_visibility}
+          def #{name}
+            return #{instance_variable_name} if defined?(#{instance_variable_name})
+            property = properties[#{name.inspect}]
+            #{instance_variable_name} = property ? persisted_state.get(property) : nil
           end
         RUBY
 
         boolean_reader_name = "#{name}?"
 
         if property.kind_of?(DataMapper::Property::Boolean)
-          class_eval <<-RUBY, __FILE__, __LINE__ + 1
-            chainable do
-              #{reader_visibility}
-              def #{boolean_reader_name}
-                #{name}
-              end
+          property_module.module_eval <<-RUBY, __FILE__, __LINE__ + 1
+            #{reader_visibility}
+            def #{boolean_reader_name}
+              #{name}
             end
           RUBY
         end
@@ -243,15 +231,12 @@ module DataMapper
         writer_visibility = property.writer_visibility
 
         writer_name = "#{name}="
-
-        class_eval <<-RUBY, __FILE__, __LINE__ + 1
-          chainable do
-            #{writer_visibility}
-            def #{writer_name}(value)
-              property = properties[#{name.inspect}]
-              self.persisted_state = persisted_state.set(property, value)
-              persisted_state.get(property)
-            end
+        property_module.module_eval <<-RUBY, __FILE__, __LINE__ + 1
+          #{writer_visibility}
+          def #{writer_name}(value)
+            property = properties[#{name.inspect}]
+            self.persisted_state = persisted_state.set(property, value)
+            persisted_state.get(property)
           end
         RUBY
       end

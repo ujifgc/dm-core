@@ -1,4 +1,4 @@
-require File.expand_path(File.join(File.dirname(__FILE__), '..', 'spec_helper'))
+require 'spec_helper'
 
 require 'ostruct'
 
@@ -18,7 +18,7 @@ describe DataMapper::Query do
 
       property :name,     String,   :key => true
       property :password, Password
-      property :balance,  Decimal
+      property :balance,  Decimal, :precision => 5, :scale => 2
 
       belongs_to :referrer, self, :required => false
       has n, :referrals, self, :inverse => :referrer
@@ -637,7 +637,7 @@ describe DataMapper::Query do
           end
         end
 
-        describe 'with a custom Property' do
+        describe 'with a Property subclass' do
           before :all do
             @options[:conditions] = { :password => 'password' }
             @return = DataMapper::Query.new(@repository, @model, @options.freeze)
@@ -784,6 +784,29 @@ describe DataMapper::Query do
           lambda {
             DataMapper::Query.new(@repository, @model, @options.update(:conditions => { 'unknown' => 1 }))
           }.should raise_error(ArgumentError, "condition \"unknown\" does not map to a property or relationship in #{@model}")
+        end
+      end
+
+      describe 'that is a Hash with a String key that is a Path and not for a Relationship in the model' do
+        it 'should raise an exception' do
+          lambda {
+            DataMapper::Query.new(@repository, @model, @options.update(:conditions => { 'unknown.id' => 1 }))
+          }.should raise_error(ArgumentError, "condition \"unknown.id\" does not map to a property or relationship in #{@model}")
+        end
+      end
+
+      describe 'that is a Hash with a Property that does not belong to the model' do
+        before do
+          Object.send(:remove_const, :Alternate) if Object.const_defined?(:Alternate)
+          @alternate_model = DataMapper::Model.new('Alternate') do
+            property :id, DataMapper::Property::Serial
+          end
+        end
+
+        it 'should raise an exception' do
+          lambda {
+            DataMapper::Query.new(@repository, @model, @options.update(:conditions => { @alternate_model.properties[:id] => 1 }))
+          }.should raise_error(ArgumentError, "condition :id does not map to a property in #{@model}, but belongs to #{@alternate_model}")
         end
       end
 
@@ -935,6 +958,41 @@ describe DataMapper::Query do
           @return.order.should == [ DataMapper::Query::Direction.new(@model.properties[:name]) ]
         end
       end
+
+      describe 'that contains a Query::Direction with a property that is not part of the model' do
+        before :all do
+          @property = DataMapper::Property::String.new(@model, :unknown)
+          @direction = DataMapper::Query::Direction.new(@property, :desc)
+          @return = DataMapper::Query.new(@repository, @model, @options.update(:order => [ @direction ]))
+        end
+
+        it 'should set the order, since it may map to a joined model' do
+          @return.order.should == [ @direction ]
+        end
+      end
+
+      describe 'that contains a Property that is not part of the model' do
+        before :all do
+          @property = DataMapper::Property::String.new(@model, :unknown)
+          @return = DataMapper::Query.new(@repository, @model, @options.update(:order => [ @property ]))
+        end
+
+        it 'should set the order, since it may map to a joined model' do
+          @return.order.should == [ DataMapper::Query::Direction.new(@property) ]
+        end
+      end
+
+      describe 'that contains a Query::Path to a property on a linked model' do
+        before :all do
+          @property = @model.referrer.name
+          @return = DataMapper::Query.new(@repository, @model, @options.update(:order => [ @property ]))
+        end
+
+        it 'should set the order' do
+          @return.order.should == [ DataMapper::Query::Direction.new(@model.properties[:name]) ]
+        end
+      end
+
       describe 'that is an Array containing a Symbol' do
         before :all do
           @return = DataMapper::Query.new(@repository, @model, @options.freeze)
@@ -1079,19 +1137,6 @@ describe DataMapper::Query do
         end
       end
 
-      describe 'that contains a Query::Direction with a property that is not part of the model' do
-        before :all do
-          @property = DataMapper::Property::String.new(@model, :unknown)
-          @direction = DataMapper::Query::Direction.new(@property, :desc)
-        end
-
-        it 'should raise an exception' do
-          lambda {
-            DataMapper::Query.new(@repository, @model, @options.update(:order => [ @direction ]))
-          }.should raise_error(ArgumentError, "+options[:order]+ entry :unknown does not map to a property in #{@model}")
-        end
-      end
-
       describe 'that contains a Query::Operator with a target that is not part of the model' do
         it 'should raise an exception' do
           lambda {
@@ -1105,18 +1150,6 @@ describe DataMapper::Query do
           lambda {
             DataMapper::Query.new(@repository, @model, @options.update(:order => [ :name.gt ]))
           }.should raise_error(ArgumentError, '+options[:order]+ entry #<DataMapper::Query::Operator @target=:name @operator=:gt> used an invalid operator gt')
-        end
-      end
-
-      describe 'that contains a Property that is not part of the model' do
-        before :all do
-          @property = DataMapper::Property::String.new(@model, :unknown)
-        end
-
-        it 'should raise an exception' do
-          lambda {
-            DataMapper::Query.new(@repository, @model, @options.update(:order => [ @property ]))
-          }.should raise_error(ArgumentError, "+options[:order]+ entry :unknown does not map to a property in #{@model}")
         end
       end
 
@@ -1919,7 +1952,7 @@ describe DataMapper::Query do
     end
 
     it 'should return expected value' do
-      @return.should == <<-INSPECT.compress_lines
+      @return.should == DataMapper::Ext::String.compress_lines(<<-INSPECT)
         #<DataMapper::Query
           @repository=:default
           @model=User
@@ -1960,7 +1993,15 @@ describe DataMapper::Query do
           end
         end
 
-        subject { @query.send(method, @other) }
+        subject do
+          result = @query.send(method, @other)
+
+          if @another
+            result = result.send(method, @another)
+          end
+
+          result
+        end
 
         describe 'with equivalent query' do
           before { @other = @query.dup }
@@ -1995,8 +2036,9 @@ describe DataMapper::Query do
 
         describe 'with self matching everything' do
           before do
-            @query = DataMapper::Query.new(@repository, @model)
-            @other = DataMapper::Query.new(@repository, @model, :name => 'Dan Kubb')
+            @query   = DataMapper::Query.new(@repository, @model)
+            @other   = DataMapper::Query.new(@repository, @model, :name => 'Dan Kubb')
+            @another = DataMapper::Query.new(@repository, @model, :citizenship => 'US')
           end
 
           it { should be_kind_of(DataMapper::Query) }
@@ -2005,10 +2047,10 @@ describe DataMapper::Query do
 
           it { should_not equal(@other) }
 
+          it { should_not equal(@another) }
+
           it 'should factor out the operation matching everything' do
-            pending 'TODO: compress Query#conditions for proper comparison' do
-              should == DataMapper::Query.new(@repository, @model, :name => 'Dan Kubb')
-            end
+            should == DataMapper::Query.new(@repository, @model, :name => 'Dan Kubb', :citizenship => 'US')
           end
         end
 
@@ -3430,13 +3472,22 @@ describe DataMapper::Query do
       it { should_not be_unique }
     end
 
-    describe 'when links are provided, but unique is not specified' do
+    describe 'when 1..n links are provided, but unique is not specified' do
+      before :all do
+        @query.should_not be_unique
+        @query.update(:links => [ :referrals ])
+      end
+
+      it { should be_unique }
+    end
+
+    describe 'when 0..1 links are provided, but unique is not specified' do
       before :all do
         @query.should_not be_unique
         @query.update(:links => [ :referrer ])
       end
 
-      it { should be_unique }
+      it { should_not be_unique }
     end
 
     describe 'when links are provided, but unique is false' do
