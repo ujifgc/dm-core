@@ -370,7 +370,12 @@ module DataMapper
       # @api semipublic
       def determine_class(type)
         return type if type < DataMapper::Property::Object
-        find_class(DataMapper::Inflector.demodulize(type.name))
+
+        if type < DataMapper::EmbeddedValue
+          DataMapper::Property::EmbeddedValue
+        else
+          find_class(DataMapper::Inflector.demodulize(type.name))
+        end
       end
 
       # @api private

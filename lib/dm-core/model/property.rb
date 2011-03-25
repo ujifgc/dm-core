@@ -55,6 +55,10 @@ module DataMapper
           raise ArgumentError, "+type+ was #{type.inspect}, which is not a supported type"
         end
 
+        if klass == DataMapper::Property::EmbeddedValue
+          options[:embedded_model] = type
+        end
+
         property = klass.new(self, name, options)
 
         repository_name = self.repository_name
