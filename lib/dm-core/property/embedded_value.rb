@@ -9,12 +9,16 @@ module DataMapper
         set!(resource, typecast(attributes, resource))
       end
 
-      def typecast(attributes, resource)
+      def typecast(attributes, resource = nil)
         if attributes.kind_of?(embedded_model)
           attributes
         else
           embedded_model.new(attributes, resource)
         end
+      end
+
+      def dump(value)
+        value.attributes
       end
 
       protected

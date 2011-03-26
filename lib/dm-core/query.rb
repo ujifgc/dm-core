@@ -1165,10 +1165,10 @@ module DataMapper
     # @api private
     def equality_operator_for_type(bind_value)
       case bind_value
-        when Model, String then :eql
-        when Enumerable    then :in
-        when Regexp        then :regexp
-        else                    :eql
+        when Model, ::String then :eql
+        when Enumerable      then :in
+        when Regexp          then :regexp
+        else                      :eql
       end
     end
 
@@ -1183,7 +1183,11 @@ module DataMapper
           bind_value = collection_for_nil(subject)
         end
 
-        operator = equality_operator_for_type(bind_value)
+        operator = if subject.kind_of?(DataMapper::Property::EmbeddedValue)
+                     :eql
+                   else
+                     equality_operator_for_type(bind_value)
+                   end
       end
 
       condition = Conditions::Comparison.new(operator, subject, bind_value)

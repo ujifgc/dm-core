@@ -76,9 +76,7 @@ describe DataMapper::EmbeddedValue do
       end
     end
 
-    supported_by :all do
-      before(:all) { ::User.auto_migrate! }
-
+    supported_by :mongo do
       let(:user) { ::User.new(:address => attributes) }
 
       describe "#save" do
@@ -92,14 +90,27 @@ describe DataMapper::EmbeddedValue do
           User.create(:address => attributes)
         end
 
-        let(:user) { User.first }
+        context "without conditions" do
+          let(:user) { User.first }
 
-        it "should return user with address" do
-          user.address.should be_kind_of(::Address)
+          it "should return user with address" do
+            user.address.should be_kind_of(::Address)
+          end
+
+          it "should return user with correct attributes" do
+            user.address.attributes.should == attributes
+          end
         end
 
-        it "should return user with correct attributes" do
-          user.address.attributes.should == attributes
+        context "with conditions" do
+          let(:user) { User.first :address => attributes }
+
+          before { User.create :address => { :street => "Bar 123" } }
+
+          it "should return correct user" do
+            user.should_not be_nil
+            user.address.attributes.should == attributes
+          end
         end
       end
     end

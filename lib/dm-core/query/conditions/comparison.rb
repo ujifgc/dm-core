@@ -483,7 +483,7 @@ module DataMapper
 
         # Typecasts each value in the inclusion set
         #
-        # @return [Array<Object>]
+        # @return [Array<Object>])
         #
         # @see AbtractComparison#typecast
         #
@@ -511,9 +511,35 @@ module DataMapper
         end
       end # module RelationshipHandler
 
+      module EmbeddedValueHandler
+        # Returns whether this comparison subject is an EmbeddedValue
+        #
+        # @return [Boolean]
+        #
+        # @api semipublic
+        def embedded_value?
+          subject.kind_of?(Property::EmbeddedValue)
+        end
+
+        private
+
+        def typecast_embedded_value(value)
+          subject.typecast(value)
+        end
+
+        def typecast(value)
+          if embedded_value?
+            typecast_embedded_value(value)
+          else
+            super
+          end
+        end
+      end
+
       # Tests whether the value in the record is equal to the expected
       # set for the Comparison.
       class EqualToComparison < AbstractComparison
+        include EmbeddedValueHandler
         include RelationshipHandler
 
         slug :eql
@@ -570,6 +596,7 @@ module DataMapper
       # Array, Range, or Set.
       class InclusionComparison < AbstractComparison
         include RelationshipHandler
+        include EmbeddedValueHandler
 
         slug :in
 

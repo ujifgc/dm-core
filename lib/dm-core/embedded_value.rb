@@ -21,7 +21,7 @@ module DataMapper
 
     # TODO: shared with resource
     def repository_name
-      parent_resource.send(:repository_name)
+      model.repository_name
     end
 
     # TODO: shared with resource

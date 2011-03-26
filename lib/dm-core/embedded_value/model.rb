@@ -20,7 +20,7 @@ module DataMapper
       #   the newly created Model class
       #
       # @api semipublic
-      def self.new(&block)
+      def self.new(attributes, resource, &block)
         model = Class.new
 
         model.class_eval <<-RUBY, __FILE__, __LINE__ + 1
@@ -28,6 +28,10 @@ module DataMapper
 
         def self.name
           to_s
+        end
+
+        def self.repository_name
+          #{resource.model.repository_name}
         end
         RUBY
 
