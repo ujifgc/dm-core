@@ -25,14 +25,8 @@ describe DataMapper::EmbeddedValue do
   it_should_behave_like "a Model with hooks"
 
   describe "parent model" do
-    let(:user) { ::User.new }
-
     let(:attributes) do
       { :street => "Foo Bar 12/34" }
-    end
-
-    before do
-      user.attributes = { :address => attributes }
     end
 
     before :all do
@@ -57,6 +51,12 @@ describe DataMapper::EmbeddedValue do
     end
 
     describe "#attributes=" do
+      let(:user) { ::User.new }
+
+      before do
+        user.attributes = { :address => attributes }
+      end
+
       it "should set address embedded value" do
         user.address.should be_kind_of(::Address)
       end
@@ -79,6 +79,8 @@ describe DataMapper::EmbeddedValue do
     supported_by :all do
       before(:all) { ::User.auto_migrate! }
 
+      let(:user) { ::User.new(:address => attributes) }
+
       describe "#save" do
         it "should persist user with embedded address" do
           user.save.should be(true)
@@ -87,7 +89,7 @@ describe DataMapper::EmbeddedValue do
 
       describe "#first" do
         before :all do
-          User.create(:address => { :street => "Bar" })
+          User.create(:address => attributes)
         end
 
         let(:user) { User.first }

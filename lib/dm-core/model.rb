@@ -572,7 +572,7 @@ module DataMapper
         resource     = nil
 
         case record
-          when Hash
+          when ::Hash
             # remap fields to use the Property object
             record = record.dup
             field_map.each { |property, field| record[property] = record.delete(field) if record.key?(field) }
@@ -594,7 +594,11 @@ module DataMapper
 
               # TODO: typecasting should happen inside the Adapter
               # and all values should come back as expected objects
-              value = property.load(value)
+              value = if property.kind_of?(DataMapper::Property::EmbeddedValue)
+                        property.typecast(property.load(value), resource)
+                      else
+                        property.load(value)
+                      end
 
               property.set!(resource, value)
             end
