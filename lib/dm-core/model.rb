@@ -595,7 +595,7 @@ module DataMapper
               # TODO: typecasting should happen inside the Adapter
               # and all values should come back as expected objects
               value = if property.kind_of?(DataMapper::Property::EmbeddedValue)
-                        property.typecast(property.load(value), resource)
+                        property.embedded_model.load(value, resource)
                       else
                         property.load(value)
                       end

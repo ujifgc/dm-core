@@ -257,6 +257,13 @@ module DataMapper
         :default
       end
 
+      # @api semipublic
+      def load(fields, parent_resource)
+        resource = new(fields, parent_resource)
+        resource.persisted_state = Resource::State::Clean.new(resource)
+        resource
+      end
+
       append_extensions DataMapper::Model::Property, Property::Lookup
       append_inclusions DataMapper::Model::Hook
     end # Model

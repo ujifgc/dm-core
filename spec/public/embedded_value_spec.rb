@@ -97,6 +97,10 @@ describe DataMapper::EmbeddedValue do
             user.address.should be_kind_of(::Address)
           end
 
+          it "should return user with address in a clean state" do
+            user.address.persisted_state.should be_kind_of(DataMapper::Resource::State::Clean)
+          end
+
           it "should return user with correct attributes" do
             user.address.attributes.should == attributes
           end
