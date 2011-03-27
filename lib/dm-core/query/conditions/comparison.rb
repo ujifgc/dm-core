@@ -483,7 +483,7 @@ module DataMapper
 
         # Typecasts each value in the inclusion set
         #
-        # @return [Array<Object>])
+        # @return [Array<Object>]
         #
         # @see AbtractComparison#typecast
         #
