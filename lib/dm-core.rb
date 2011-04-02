@@ -41,6 +41,28 @@ require 'dm-core/support/subject'
 
 require 'dm-core/collection'
 
+require 'dm-core/resource/raise_on_save'
+require 'dm-core/resource/persisted_state'
+require 'dm-core/resource/attributes'
+require 'dm-core/resource/operators'
+require 'dm-core/resource/hooks'
+require 'dm-core/resource'
+require 'dm-core/resource/state'
+require 'dm-core/resource/state/transient'
+require 'dm-core/resource/state/immutable'
+require 'dm-core/resource/state/persisted'
+require 'dm-core/resource/state/clean'
+require 'dm-core/resource/state/deleted'
+require 'dm-core/resource/state/dirty'
+
+require 'dm-core/query'
+require 'dm-core/query/conditions/operation'
+require 'dm-core/query/conditions/comparison'
+require 'dm-core/query/operator'
+require 'dm-core/query/direction'
+require 'dm-core/query/path'
+require 'dm-core/query/sort'
+
 require 'dm-core/property'
 require 'dm-core/property/object'
 require 'dm-core/property/string'
@@ -62,15 +84,13 @@ require 'dm-core/property/embedded_value'
 require 'dm-core/property/lookup'
 require 'dm-core/property_set'
 
+require 'dm-core/model/core'
 require 'dm-core/model'
 require 'dm-core/model/hook'
 require 'dm-core/model/is'
 require 'dm-core/model/scope'
 require 'dm-core/model/relationship'
 require 'dm-core/model/property'
-
-require 'dm-core/embedded_value/model'
-require 'dm-core/embedded_value'
 
 require 'dm-core/adapters'
 require 'dm-core/adapters/abstract_adapter'
@@ -80,28 +100,18 @@ require 'dm-core/associations/one_to_one'
 require 'dm-core/associations/many_to_one'
 require 'dm-core/associations/many_to_many'
 require 'dm-core/identity_map'
-require 'dm-core/query'
-require 'dm-core/query/conditions/operation'
-require 'dm-core/query/conditions/comparison'
-require 'dm-core/query/operator'
-require 'dm-core/query/direction'
-require 'dm-core/query/path'
-require 'dm-core/query/sort'
+
 require 'dm-core/repository'
-require 'dm-core/resource'
-require 'dm-core/resource/state'
-require 'dm-core/resource/state/transient'
-require 'dm-core/resource/state/immutable'
-require 'dm-core/resource/state/persisted'
-require 'dm-core/resource/state/clean'
-require 'dm-core/resource/state/deleted'
-require 'dm-core/resource/state/dirty'
+
 require 'dm-core/support/logger'
 require 'dm-core/support/naming_conventions'
 require 'dm-core/version'
 
 require 'dm-core/core_ext/kernel'             # TODO: do not load automatically
 require 'dm-core/core_ext/symbol'             # TODO: do not load automatically
+
+require 'dm-core/embedded_value/model'
+require 'dm-core/embedded_value'
 
 # A logger should always be present. Lets be consistent with DO
 DataMapper::Logger.new(StringIO.new, :fatal)
