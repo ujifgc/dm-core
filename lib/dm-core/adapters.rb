@@ -49,7 +49,7 @@ module DataMapper
       # Turns options hash or connection URI into the options hash used
       # by the adapter.
       #
-      # @param [Hash, Addressable::URI, String] options
+      # @param [Hash] options
       #   the options to be normalized
       #
       # @return [Mash]
@@ -59,10 +59,8 @@ module DataMapper
       def normalize_options(options)
         case options
           when Hash             then normalize_options_hash(options)
-          when Addressable::URI then normalize_options_uri(options)
-          when String           then normalize_options_string(options)
           else
-            assert_kind_of 'options', options, Hash, Addressable::URI, String
+            assert_kind_of 'options', options, Hash
         end
       end
 
@@ -77,42 +75,6 @@ module DataMapper
       # @api private
       def normalize_options_hash(hash)
         DataMapper::Ext::Hash.to_mash(hash)
-      end
-
-      # Normalize Addressable::URI options into a Mash
-      #
-      # @param [Addressable::URI] uri
-      #   the uri to be normalized
-      #
-      # @return [Mash]
-      #   the options normalized as a Mash
-      #
-      # @api private
-      def normalize_options_uri(uri)
-        options = normalize_options_hash(uri.to_hash)
-
-        # Extract the name/value pairs from the query portion of the
-        # connection uri, and set them as options directly.
-        if options.fetch(:query)
-          options.update(uri.query_values)
-        end
-
-        options[:adapter] = options.fetch(:scheme)
-
-        options
-      end
-
-      # Normalize String options into a Mash
-      #
-      # @param [String] string
-      #   the string to be normalized
-      #
-      # @return [Mash]
-      #   the options normalized as a Mash
-      #
-      # @api private
-      def normalize_options_string(string)
-        normalize_options_uri(Addressable::URI.parse(string))
       end
 
       # Return the adapter class constant

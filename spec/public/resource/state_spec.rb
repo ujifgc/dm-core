@@ -24,7 +24,7 @@ describe 'DataMapper::Resource' do
   supported_by :all do
     before do
       @values = {
-        :string_   => Addressable::URI.parse('http://test.example/'),
+        :string_   => 'http://test.example/',
         :bool_     => true,
         :float_    => 2.5,
         :integer_  => 10,
