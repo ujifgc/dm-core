@@ -1,21 +1,23 @@
 #!/usr/bin/env ruby -Ku
 
-require 'ftools'
+require 'fileutils'
 require 'rubygems'
 
 gem 'addressable', '~> 2.1'
 gem 'faker',       '~> 0.3.1'
-gem 'ruby-prof',   '~> 0.7.3'
+gem 'ruby-prof' #,   '~> 0.7.3'
+gem 'dm-migrations'
 
 require 'addressable/uri'
 require 'faker'
 require 'ruby-prof'
+require 'dm-migrations'
 
 require File.expand_path(File.join(File.dirname(__FILE__), '..', 'lib', 'dm-core'))
 
-TEXT_OUTPUT = DataMapper.root / 'profile_results.txt'
-HTML_OUTPUT = DataMapper.root / 'profile_results.html'
-CALL_OUTPUT = DataMapper.root / 'profile_results.prof'
+TEXT_OUTPUT = DataMapper.root + 'profile_results.txt'
+HTML_OUTPUT = DataMapper.root + 'profile_results.html'
+CALL_OUTPUT = DataMapper.root + 'profile_results.prof'
 
 SOCKET_FILE = Pathname.glob(%w[
   /opt/local/var/run/mysql5/mysqld.sock
@@ -28,19 +30,19 @@ SOCKET_FILE = Pathname.glob(%w[
 configuration_options = {
   :adapter  => 'mysql',
   :database => 'dm_core_test',
-  :host     => '127.0.0.1',
+  :host     => 'localhost',
   :username => 'root',
   :password => '',
   :socket   => SOCKET_FILE,
 }
 
-DataMapper::Logger.new(DataMapper.root / 'log' / 'dm.log', :debug)
+DataMapper::Logger.new(DataMapper.root + 'log/dm.log', :debug)
 adapter = DataMapper.setup(:default, configuration_options)
 
 if configuration_options[:adapter]
-  sqlfile       = File.join(File.dirname(__FILE__), '..', 'tmp', 'performance.sql')
-  mysql_bin     = %w[ mysql mysql5 ].select { |bin| `which #{bin}`.length > 0 }
-  mysqldump_bin = %w[ mysqldump mysqldump5 ].select { |bin| `which #{bin}`.length > 0 }
+  sqlfile       = File.join(File.dirname(__FILE__), '../log/performance.sql')
+  mysql_bin     = %w[ mysql mysql5 ].select { |bin| `which #{bin}`.length > 0 }.first
+  mysqldump_bin = %w[ mysqldump mysqldump5 ].select { |bin| `which #{bin}`.length > 0 }.first
 end
 
 class User
@@ -107,7 +109,7 @@ c = configuration_options
 if sqlfile && File.exists?(sqlfile)
   puts "Found data-file. Importing from #{sqlfile}"
   #adapter.execute("LOAD DATA LOCAL INFILE '#{sqlfile}' INTO TABLE exhibits")
-  `#{mysql_bin} -u #{c[:username]} #{"-p#{c[:password]}" unless c[:password].blank?} #{c[:database]} < #{sqlfile}`
+  `#{mysql_bin} -u #{c[:username]} #{"-p#{c[:password]}" unless c[:password]==''} #{c[:database]} < #{sqlfile}`
 else
   puts 'Generating data for benchmarking...'
 
@@ -138,23 +140,11 @@ else
   end
 
   if sqlfile
-    answer = nil
-    until answer && answer[/\A(?:y(?:es)?|no?)\b/i]
-      print('Would you like to dump data into tmp/performance.sql (for faster setup)? [Yn]');
-      STDOUT.flush
-      answer = gets
-    end
-
-    if %w[ y yes ].include?(answer.downcase)
-      File.makedirs(File.dirname(sqlfile))
-      #adapter.execute("SELECT * INTO OUTFILE '#{sqlfile}' FROM exhibits;")
-      `#{mysqldump_bin} -u #{c[:username]} #{"-p#{c[:password]}" unless c[:password].blank?} #{c[:database]} exhibits users > #{sqlfile}`
-      puts "File saved\n"
-    end
+    `#{mysqldump_bin} -u #{c[:username]} #{"-p#{c[:password]}" unless c[:password]==''} #{c[:database]} exhibits users > #{sqlfile}`
   end
 end
 
-TIMES = 10_000
+TIMES = 1_000
 
 exhibits = Exhibit.all.to_a
 
@@ -215,4 +205,4 @@ profile do
 #  TIMES.times { Exhibit.transaction { Exhibit.new } }
 end
 
-puts "Done!"
+puts "Done! #{GC.stat(:total_allocated_object)}"

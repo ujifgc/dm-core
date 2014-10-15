@@ -1,17 +1,28 @@
 #!/usr/bin/env ruby -Ku
 
-require 'ftools'
+require 'fileutils'
 require 'rubygems'
 
-gem 'activerecord', '~> 2.3.4'
+gem 'mysql2'
+gem 'activerecord', '~> 4'
 gem 'addressable',  '~> 2.1'
 gem 'faker',        '~> 0.3.1'
 gem 'rbench',       '~> 0.2.3'
+gem 'dm-migrations'
+
+if ! Array.method_defined?(:nitems)
+  class Array
+    def nitems
+      count{|x| !x.nil?}
+    end
+  end
+end
 
 require 'active_record'
 require 'addressable/uri'
 require 'faker'
 require 'rbench'
+require 'dm-migrations'
 
 require File.expand_path(File.join(File.dirname(__FILE__), '..', 'lib', 'dm-core'))
 
@@ -26,7 +37,7 @@ socket_file = Pathname.glob(%w[
 ]).find { |path| path.socket? }
 
 configuration_options = {
-  :adapter => 'mysql',
+  :adapter => 'mysql2',
   :username => 'root',
   :password => '',
   :database => 'dm_core_test',
@@ -34,36 +45,34 @@ configuration_options = {
 
 configuration_options[:socket] = socket_file unless socket_file.nil?
 
-log_dir = DataMapper.root / 'log'
+log_dir = DataMapper.root + 'log'
 log_dir.mkdir unless log_dir.directory?
 
-DataMapper::Logger.new(log_dir / 'dm.log', :off)
+DataMapper::Logger.new(log_dir + 'dm.log', :off)
 adapter = DataMapper.setup(:default, "mysql://root@127.0.0.1/dm_core_test?socket=#{socket_file}")
 
 if configuration_options[:adapter]
-  sqlfile       = File.join(File.dirname(__FILE__), '..', 'tmp', 'performance.sql')
-  mysql_bin     = %w[ mysql mysql5 ].select { |bin| `which #{bin}`.length > 0 }
-  mysqldump_bin = %w[ mysqldump mysqldump5 ].select { |bin| `which #{bin}`.length > 0 }
+  sqlfile       = File.join(File.dirname(__FILE__), '../log/performance.sql')
+  mysql_bin     = %w[ mysql mysql5 ].select { |bin| `which #{bin}`.length > 0 }.first
+  mysqldump_bin = %w[ mysqldump mysqldump5 ].select { |bin| `which #{bin}`.length > 0 }.first
 end
 
-ActiveRecord::Base.logger = Logger.new(log_dir / 'ar.log')
+ActiveRecord::Base.logger = Logger.new(log_dir + 'ar.log')
 ActiveRecord::Base.logger.level = 0
 
 ActiveRecord::Base.establish_connection(configuration_options)
 
 class ARExhibit < ActiveRecord::Base #:nodoc:
-  set_table_name 'exhibits'
+  self.table_name = 'exhibits'
 
   belongs_to :user, :class_name => 'ARUser', :foreign_key => 'user_id'
 end
 
 class ARUser < ActiveRecord::Base #:nodoc:
-  set_table_name 'users'
+  self.table_name = 'users'
 
   has_many :exhibits, :foreign_key => 'user_id'
 end
-
-ARExhibit.find_by_sql('SELECT 1')
 
 class User
   include DataMapper::Resource
@@ -90,6 +99,8 @@ end
 
 DataMapper.auto_migrate!
 
+ARExhibit.find_by_sql('SELECT 1')
+
 def touch_attributes(*exhibits)
   exhibits.flatten.each do |exhibit|
     exhibit.id
@@ -111,7 +122,6 @@ c = configuration_options
 
 if sqlfile && File.exists?(sqlfile)
   puts "Found data-file. Importing from #{sqlfile}"
-  #adapter.execute("LOAD DATA LOCAL INFILE '#{sqlfile}' INTO TABLE exhibits")
   `#{mysql_bin} -u #{c[:username]} #{"-p#{c[:password]}" unless c[:password].blank?} #{c[:database]} < #{sqlfile}`
 else
   puts 'Generating data for benchmarking...'
@@ -125,8 +135,8 @@ else
   notes = Faker::Lorem.paragraphs.join($/)
   today = Date.today
 
-  puts 'Inserting 10,000 users and exhibits...'
-  10_000.times do
+  puts 'Inserting 1,000 users and exhibits...'
+  1_000.times do
     user = User.create(
       :created_on => today,
       :name       => Faker::Name.name,
@@ -143,19 +153,7 @@ else
   end
 
   if sqlfile
-    answer = nil
-    until answer && answer[/\A(?:y(?:es)?|no?)\b/i]
-      print('Would you like to dump data into tmp/performance.sql (for faster setup)? [Yn]');
-      STDOUT.flush
-      answer = gets
-    end
-
-    if %w[ y yes ].include?(answer.downcase)
-      File.makedirs(File.dirname(sqlfile))
-      #adapter.execute("SELECT * INTO OUTFILE '#{sqlfile}' FROM exhibits;")
-      `#{mysqldump_bin} -u #{c[:username]} #{"-p#{c[:password]}" unless c[:password].blank?} #{c[:database]} exhibits users > #{sqlfile}`
-      puts "File saved\n"
-    end
+    `#{mysqldump_bin} -u #{c[:username]} #{"-p#{c[:password]}" unless c[:password].blank?} #{c[:database]} exhibits users > #{sqlfile}`
   end
 end
 
@@ -201,7 +199,7 @@ RBench.run(TIMES) do
     dm { Exhibit.new(attrs) }
   end
 
-  report 'Model.get specific (not cached)' do
+  report 'Model.get specific (not cached)', (TIMES / 10).ceil do
     ActiveRecord::Base.uncached { ar { touch_attributes(ARExhibit.find(1)) } }
     dm { touch_attributes(Exhibit.get(1)) }
   end
@@ -211,24 +209,24 @@ RBench.run(TIMES) do
     Exhibit.repository(:default) { dm { touch_attributes(Exhibit.get(1)) } }
   end
 
-  report 'Model.first' do
+  report 'Model.first', (TIMES / 10).ceil do
     ar { touch_attributes(ARExhibit.first) }
     dm { touch_attributes(Exhibit.first) }
   end
 
-  report 'Model.all limit(100)', (TIMES / 10).ceil do
-    ar { touch_attributes(ARExhibit.find(:all, :limit => 100)) }
+  report 'Model.all limit(100)', (TIMES / 100).ceil do
+    ar { touch_attributes(ARExhibit.limit(100)) }
     dm { touch_attributes(Exhibit.all(:limit => 100)) }
   end
 
-  report 'Model.all limit(100) with relationship', (TIMES / 10).ceil do
-    ar { touch_relationships(ARExhibit.all(:limit => 100, :include => [ :user ])) }
+  report 'Model.all limit(100) with relationship', (TIMES / 1000).ceil do
+    ar { touch_relationships(ARExhibit.includes(:user).limit(100)) }
     dm { touch_relationships(Exhibit.all(:limit => 100)) }
   end
 
   report 'Model.all limit(10,000)', (TIMES / 1000).ceil do
-    ar { touch_attributes(ARExhibit.find(:all, :limit => 10_000)) }
-    dm { touch_attributes(Exhibit.all(:limit => 10_000)) }
+    ar { touch_attributes(ARExhibit.limit(1000)) }
+    dm { touch_attributes(Exhibit.all(:limit => 1000)) }
   end
 
   exhibit = {
@@ -238,7 +236,7 @@ RBench.run(TIMES) do
     :created_on => Date.today
   }
 
-  report 'Model.create' do
+  report 'Model.create', (TIMES / 100).ceil do
     ar { ARExhibit.create(exhibit) }
     dm { Exhibit.create(exhibit) }
   end
@@ -250,20 +248,20 @@ RBench.run(TIMES) do
     dm { exhibit = Exhibit.new(attrs_first);   exhibit.attributes = attrs_second }
   end
 
-  report 'Resource#update' do
+  report 'Resource#update', (TIMES / 10).ceil do
     ar { ARExhibit.find(1).update_attributes(:name => 'bob') }
     dm { Exhibit.get(1).update(:name => 'bob') }
   end
 
-  report 'Resource#destroy' do
+  report 'Resource#destroy', (TIMES / 100).ceil do
     ar { ARExhibit.first.destroy }
     dm { Exhibit.first.destroy }
   end
 
-  report 'Model.transaction' do
-    ar { ARExhibit.transaction { ARExhibit.new } }
-    dm { Exhibit.transaction { Exhibit.new } }
-  end
+#  report 'Model.transaction', (TIMES / 100).ceil do
+#    ar { ARExhibit.transaction { ARExhibit.new } }
+#    dm { Exhibit.transaction { Exhibit.new } }
+#  end
 
   summary 'Total'
 end
