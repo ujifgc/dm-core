@@ -643,7 +643,7 @@ module DataMapper
     #
     # @api private
     def sorted_fields
-      fields.sort_by { |property| property.hash }
+      fields.sort_by(&:hash)
     end
 
     # Transform Query into subquery conditions
@@ -1421,7 +1421,7 @@ module DataMapper
     #
     # @api private
     def self_relationship_options
-      keys       = model_key.map { |property| property.name }
+      keys       = model_key.map(&:name)
       repository = self.repository
       {
         :child_key              => keys,

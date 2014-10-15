@@ -280,7 +280,7 @@ module DataMapper
 
         # @api private
         def child_properties
-          source_key.map { |property| property.name }
+          source_key.map(&:name)
         end
 
         # @api private

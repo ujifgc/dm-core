@@ -69,7 +69,7 @@ module DataMapper
         #
         # @api private
         def self.slugs
-          AbstractComparison.descendants.map { |comparison_class| comparison_class.slug }
+          AbstractComparison.descendants.map(&:slug)
         end
 
         class << self

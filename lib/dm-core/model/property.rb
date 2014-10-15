@@ -143,7 +143,7 @@ module DataMapper
 
       # @api public
       def serial(repository_name = default_repository_name)
-        key(repository_name).detect { |property| property.serial? }
+        key(repository_name).detect(&:serial?)
       end
 
       # Gets the field naming conventions for this resource in the given Repository

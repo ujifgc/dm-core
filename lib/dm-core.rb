@@ -278,7 +278,7 @@ module DataMapper
   #
   # @api public
   def self.finalize
-    Model.descendants.each { |model| model.finalize }
+    Model.descendants.each(&:finalize)
     self
   end
 

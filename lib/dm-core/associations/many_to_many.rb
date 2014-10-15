@@ -259,12 +259,12 @@ module DataMapper
         chainable do
           # @api semipublic
           def many_to_one_options
-            { :parent_key => target_key.map { |property| property.name } }
+            { :parent_key => target_key.map(&:name) }
           end
 
           # @api semipublic
           def one_to_many_options
-            { :parent_key => source_key.map { |property| property.name } }
+            { :parent_key => source_key.map(&:name) }
           end
         end
 

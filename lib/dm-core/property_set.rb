@@ -50,12 +50,12 @@ module DataMapper
     # TODO: make PropertySet#reject return a PropertySet instance
     # @api semipublic
     def defaults
-      @defaults ||= self.class.new(key | [ discriminator ].compact | reject { |property| property.lazy? }).freeze
+      @defaults ||= self.class.new(key | [ discriminator ].compact | reject(&:lazy?)).freeze
     end
 
     # @api semipublic
     def key
-      @key ||= self.class.new(select { |property| property.key? }).freeze
+      @key ||= self.class.new(select(&:key?)).freeze
     end
 
     # @api semipublic

@@ -1072,7 +1072,7 @@ module DataMapper
       if original_attributes.any?
         true
       elsif new?
-        !model.serial.nil? || properties.any? { |property| property.default? }
+        !model.serial.nil? || properties.any?(&:default?)
       else
         false
       end
@@ -1102,7 +1102,7 @@ module DataMapper
     #
     # @api private
     def dirty_children?
-      child_associations.any? { |association| association.dirty? }
+      child_associations.any?(&:dirty?)
     end
 
     # Return true if +other+'s is equivalent or equal to +self+'s

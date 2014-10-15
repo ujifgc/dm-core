@@ -893,7 +893,7 @@ module DataMapper
     #
     # @api public
     def destroy
-      if destroyed = all? { |resource| resource.destroy }
+      if destroyed = all?(&:destroy)
         clear
       end
 
@@ -963,7 +963,7 @@ module DataMapper
     #
     # @api public
     def dirty?
-      loaded_entries.any? { |resource| resource.dirty? } || @removed.any?
+      loaded_entries.any?(&:dirty?) || @removed.any?
     end
 
     # Gets a Human-readable representation of this collection,
@@ -974,7 +974,7 @@ module DataMapper
     #
     # @api public
     def inspect
-      "[#{map { |resource| resource.inspect }.join(', ')}]"
+      "[#{map(&:inspect).join(', ')}]"
     end
 
     # @api semipublic
@@ -1001,7 +1001,7 @@ module DataMapper
     #
     # @api private
     def loaded_entries
-      (loaded? ? self : head + tail).reject { |resource| resource.destroyed? }
+      (loaded? ? self : head + tail).reject(&:destroyed?)
     end
 
     # Returns the PropertySet representing the fields in the Collection scope

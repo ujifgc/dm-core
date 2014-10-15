@@ -18,7 +18,7 @@ module DataMapper; module Ext
     #
     # @api semipublic
     def self.compress_lines(string, spaced = true)
-      string.split($/).map { |line| line.strip }.join(spaced ? ' ' : '')
+      string.split($/).map(&:strip).join(spaced ? ' ' : '')
     end
   end
 end; end

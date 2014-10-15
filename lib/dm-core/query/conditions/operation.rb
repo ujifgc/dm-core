@@ -31,7 +31,7 @@ module DataMapper
         #
         # @api private
         def self.slugs
-          AbstractOperation.descendants.map { |operation_class| operation_class.slug }
+          AbstractOperation.descendants.map(&:slug)
         end
 
         class << self
@@ -293,7 +293,7 @@ module DataMapper
         #
         # @api semipublic
         def to_s
-          empty? ? '' : "(#{sort_by { |op| op.to_s }.map { |op| op.to_s }.join(" #{slug.to_s.upcase} ")})"
+          empty? ? '' : "(#{sort_by(&:to_s).map(&:to_s).join(" #{slug.to_s.upcase} ")})"
         end
 
         # Test if the operation is negated
@@ -316,7 +316,7 @@ module DataMapper
         #
         # @api private
         def sorted_operands
-          sort_by { |op| op.hash }
+          sort_by(&:hash)
         end
 
         private
@@ -344,7 +344,7 @@ module DataMapper
         #
         # @api semipublic
         def initialize_copy(*)
-          @operands = map { |op| op.dup }.to_set
+          @operands = map(&:dup).to_set
         end
 
         # Minimize the operands recursively
@@ -472,7 +472,7 @@ module DataMapper
         def minimize
           minimize_operands
 
-          return Operation.new(:null) if any? && all? { |op| op.nil? }
+          return Operation.new(:null) if any? && all?(&:nil?)
 
           prune_operands
 
@@ -521,7 +521,7 @@ module DataMapper
         def minimize
           minimize_operands
 
-          return Operation.new(:null) if any? { |op| op.nil? }
+          return Operation.new(:null) if any?(&:nil?)
 
           prune_operands
 

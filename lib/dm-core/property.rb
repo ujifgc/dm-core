@@ -350,7 +350,7 @@ module DataMapper
     INVALID_NAMES = (Resource.instance_methods +
                      Resource.private_instance_methods +
                      Query::OPTIONS.to_a
-                    ).map { |name| name.to_s }
+                    ).map(&:to_s)
 
     attr_reader :primitive, :model, :name, :instance_variable_name,
       :reader_visibility, :writer_visibility, :options,
@@ -776,7 +776,7 @@ module DataMapper
       keys = options.keys
 
       if (unknown_keys = keys - self.class.accepted_options).any?
-        raise ArgumentError, "options #{unknown_keys.map { |key| key.inspect }.join(' and ')} are unknown"
+        raise ArgumentError, "options #{unknown_keys.map(&:inspect).join(' and ')} are unknown"
       end
 
       options.each do |key, value|

@@ -780,7 +780,7 @@ module DataMapper
     #
     # @api private
     def finalize_relationships
-      relationships(repository_name).each { |relationship| relationship.finalize }
+      relationships(repository_name).each(&:finalize)
     end
 
     # Initialize the list of allowed writer methods
@@ -789,7 +789,7 @@ module DataMapper
     #
     # @api private
     def finalize_allowed_writer_methods
-      @allowed_writer_methods  = public_instance_methods.map { |method| method.to_s }.grep(WRITER_METHOD_REGEXP).to_set
+      @allowed_writer_methods  = public_instance_methods.map(&:to_s).grep(WRITER_METHOD_REGEXP).to_set
       @allowed_writer_methods -= INVALID_WRITER_METHODS
       @allowed_writer_methods.freeze
     end

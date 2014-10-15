@@ -5,7 +5,7 @@ module DataMapper
       module Helpers
 
         def supported_by(*adapters, &block)
-          adapters = adapters.map { |adapter| adapter.to_sym }
+          adapters = adapters.map(&:to_sym)
           adapter  = DataMapper::Spec.adapter_name.to_sym
           if adapters.include?(:all) || adapters.include?(adapter)
             describe_adapter(:default, &block)

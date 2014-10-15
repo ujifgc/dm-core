@@ -33,7 +33,7 @@ module DataMapper
       private
 
       def parse_args(*args)
-        case args.map { |arg| arg.class }
+        case args.map(&:class)
           when [ String, TrueClass ], [ String, FalseClass ] then args
           when [ String, NilClass ]                          then [ args.first, false      ]
           when [ String ]                                    then [ args.first, true       ]
